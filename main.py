@@ -1,3 +1,4 @@
+import json
 import random
 from matplotlib import pyplot as plt
 import numpy as np
@@ -85,13 +86,19 @@ def simulate_battle(verbose: bool = False):
             if verbose:
                 print('Hell Raisers win!')
             break
+        if not verbose and acrange[-1] == 1 and modrange[-1] == 1:
+            acest = ac_est[party2[0].name]
+            modest = mod_est[party2[0].name]
+            assert acest.xvals[acest.current_estimate > 0][0] == party2[0].ac
+            assert modest.xvals[modest.current_estimate > 0][0] == party2[0].weapon_bonus + party2[0].prof
+            break
     return np.array(acrange), np.array(modrange)
 
 
 def main():
     acto0 = []
     modto0 = []
-    nsims = 1000
+    nsims = 10000
     for i in range(nsims):
         acrange, modrange = simulate_battle()
         acto0.append(np.where(acrange == 1)[0][0])
@@ -106,17 +113,41 @@ def main():
             plt.legend(['AC', 'Modifier'])
             plt.show()
 
-    plt.hist(acto0)
+    bins = np.arange(0, 250, 10)
+    acres = plt.hist(acto0, bins=bins)[0]
+    acres /= nsims
     plt.xlabel('Number of Attacks')
     plt.ylabel('Frequency')
     plt.title('Number of Attacks until AC is Known')
     plt.show()
 
-    plt.hist(modto0)
+    modres, resbins, _ = plt.hist(modto0, bins=bins)
+    modres /= nsims
     plt.xlabel('Number of Attacks')
     plt.ylabel('Frequency')
     plt.title('Number of Attacks until Modifier is Known')
     plt.show()
+
+    print(acres.tolist())
+    print(modres.tolist())
+    print(resbins.tolist())
+
+    # with open('results.json', 'w') as file:
+    #     json.dump({'ac': [int(i) for i in acto0], 'mod': [int(i) for i in modto0]}, file)
+
+    with open('results.json', 'r') as file:
+        res = json.load(file)
+    acto0 = res['ac']
+    modto0 = res['mod']
+
+    acto0 = np.array(acto0)
+    acmean = np.mean(acto0)
+    acstdev = np.std(acto0)
+    skew = np.mean(((acto0 - acmean) / acstdev) ** 3)
+    kurtosis = np.mean(((acto0 - acmean) / acstdev) ** 4) - 3
+    print(f'Mean is {acmean}, stdev is {acstdev}')
+    print(f'Median is {np.median(acto0)}')
+    print(f'Skew is {skew}, kurtosis is {kurtosis}')
 
 
 if __name__ == '__main__':
