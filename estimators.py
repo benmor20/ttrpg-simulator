@@ -13,6 +13,7 @@ class Estimator(ABC):
     Attributes:
         current_estimate: a numpy vector giving the probability of each option
         noptions: int, the number of options
+        xvals: the range of possible values of the statistic to estimate
     """
     def __init__(self, noptions: int):
         self.current_estimate = np.ones((noptions,)) / noptions
@@ -47,7 +48,7 @@ class Estimator(ABC):
 
     def update(self, measurement):
         """
-        Update the current belief given a measurement
+        Update the current belief given a measurement, as per Bayes' Rule
 
         :param measurement: the measured value
         """

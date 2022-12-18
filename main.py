@@ -35,11 +35,35 @@ def display_hp_plot(p1hp, p2hp):
     plt.show()
 
 
+def display_range_plots(acrange, modrange):
+    if np.any(acrange == 1):
+        time_till_ac_one = np.where(acrange == 1)[0][0]
+    else:
+        time_till_ac_one = len(acrange)
+    if np.any(modrange == 1):
+        time_till_mod_one = np.where(modrange == 1)[0][0]
+    else:
+        time_till_mod_one = len(modrange)
+    end = 75
+    if end > len(acrange):
+        acrange = np.concatenate([acrange, acrange[-1] * np.ones((end - len(acrange),))])
+    if end > len(modrange):
+        modrange = np.concatenate([modrange, modrange[-1] * np.ones((end - len(modrange), ))])
+
+    plt.plot(acrange[:end])
+    plt.plot(modrange[:end])
+    plt.xlabel('Number of attacks')
+    plt.ylabel('Number of possiblities')
+    plt.title('Uncertainty of AC and Modifier Over the Course of a Battle')
+    plt.legend(['AC', 'Modifier'])
+    plt.show()
+
+
 def simulate_battle(verbose: bool = False, plot: bool = False):
     party1 = [Character('Manster Wipower', 90, 10, 10, 0, 8, False),
               Character('Abayes Satano\'brien', 150, 14, 10, 0, 10, False)]
-    party2 = [Character('Blelduth Chestsplitter', 180, 14, 10, 0, 8, False),
-              Character('Washingtonlotus Toadstallchardson', 90, 8, 14, 0, 8, True)]
+    party2 = [Character('Blelduth Chestsplitter', 240, 14, 10, 0, 8, False), ]
+              #Character('Washingtonlotus Toadstallchardson', 90, 8, 14, 0, 8, True)]
     mod_est = {c.name: ModifierEstimator() for c in party2}
     ac_est = {c.name: ACEstimator() for c in party2}
     all_characters = {c.name: c for c in party1 + party2}
@@ -79,17 +103,17 @@ def simulate_battle(verbose: bool = False, plot: bool = False):
                         print(f'{opponent.name} is DEAD')
 
             if is_party1:
-                est = ac_est[opponent.name]
-                est.update((to_hit, hit))
-                poss = est.xvals[est.current_estimate > 0]
+                ac_est[opponent.name].update((to_hit, hit))
+                poss = ac_est[opponent.name].xvals[ac_est[opponent.name].current_estimate > 0]
                 acrange.append(max(poss) - min(poss) + 1)
             else:
-                est = mod_est[name]
-                est.update(to_hit)
-                poss = est.xvals[est.current_estimate > 0]
+                mod_est[name].update(to_hit)
+                poss = mod_est[name].xvals[mod_est[name].current_estimate > 0]
                 modrange.append(max(poss) - min(poss) + 1)
         p1hp.append(sum(c.hp for c in party1))
         p2hp.append(sum(c.hp for c in party2))
+        # if verbose:
+        #     display_est_plots(mod_est, ac_est)
         if all(c.hp <= 0 for c in party1):
             if verbose:
                 print('Freak the Mighty wins!')
@@ -98,7 +122,7 @@ def simulate_battle(verbose: bool = False, plot: bool = False):
             if verbose:
                 print('Hell Raisers win!')
             break
-        if not verbose and acrange[-1] == 1 and modrange[-1] == 1:
+        if acrange[-1] == 1 and modrange[-1] == 1:
             acest = ac_est[party2[0].name]
             modest = mod_est[party2[0].name]
             assert acest.xvals[acest.current_estimate > 0][0] == party2[0].ac
@@ -106,63 +130,50 @@ def simulate_battle(verbose: bool = False, plot: bool = False):
             break
     if plot:
         display_hp_plot(p1hp, p2hp)
+        display_range_plots(np.array(acrange), np.array(modrange))
     return np.array(acrange), np.array(modrange)
 
 
-def main():
-    acto0 = []
-    modto0 = []
-    nsims = 10000
-    for i in range(nsims):
-        acrange, modrange = simulate_battle()
-        acto0.append(np.where(acrange == 1)[0][0])
-        modto0.append(np.where(modrange == 1)[0][0])
+def main(simulate: bool = False):
+    if simulate:
+        acto0 = []
+        modto0 = []
+        nsims = 10000
+        for i in range(nsims):
+            acrange, modrange = simulate_battle(plot=i == nsims - 1)
+            acto0.append(np.where(acrange == 1)[0][0])
+            modto0.append(np.where(modrange == 1)[0][0])
 
-        if i == nsims - 1:
-            plt.plot(acrange[:30])
-            plt.plot(modrange[:30])
-            plt.xlabel('Number of attacks')
-            plt.ylabel('Number of possiblities')
-            plt.title('Uncertainty of AC and Modifier Over the Course of a Battle')
-            plt.legend(['AC', 'Modifier'])
-            plt.show()
+        with open('results.json', 'w') as file:
+            json.dump({'ac': [int(i) for i in acto0], 'mod': [int(i) for i in modto0]}, file)
+    else:
+        with open('results.json', 'r') as file:
+            res = json.load(file)
+        acto0 = res['ac']
+        modto0 = res['mod']
+
+        acto0 = np.array(acto0)
+        acmean = np.mean(acto0)
+        acstdev = np.std(acto0)
+        skew = np.mean(((acto0 - acmean) / acstdev) ** 3)
+        kurtosis = np.mean(((acto0 - acmean) / acstdev) ** 4) - 3
+        print(f'Mean is {acmean:.3f}, stdev is {acstdev:.3f}')
+        print(f'Median is {int(np.median(acto0))}')
+        print(f'Skew is {skew:.2f}, kurtosis is {kurtosis:.2f}')
 
     bins = np.arange(0, 250, 10)
     acres = plt.hist(acto0, bins=bins)[0]
-    acres /= nsims
     plt.xlabel('Number of Attacks')
     plt.ylabel('Frequency')
     plt.title('Number of Attacks until AC is Known')
     plt.show()
 
     modres, resbins, _ = plt.hist(modto0, bins=bins)
-    modres /= nsims
     plt.xlabel('Number of Attacks')
     plt.ylabel('Frequency')
     plt.title('Number of Attacks until Modifier is Known')
     plt.show()
 
-    print(acres.tolist())
-    print(modres.tolist())
-    print(resbins.tolist())
-
-    # with open('results.json', 'w') as file:
-    #     json.dump({'ac': [int(i) for i in acto0], 'mod': [int(i) for i in modto0]}, file)
-
-    with open('results.json', 'r') as file:
-        res = json.load(file)
-    acto0 = res['ac']
-    modto0 = res['mod']
-
-    acto0 = np.array(acto0)
-    acmean = np.mean(acto0)
-    acstdev = np.std(acto0)
-    skew = np.mean(((acto0 - acmean) / acstdev) ** 3)
-    kurtosis = np.mean(((acto0 - acmean) / acstdev) ** 4) - 3
-    print(f'Mean is {acmean}, stdev is {acstdev}')
-    print(f'Median is {np.median(acto0)}')
-    print(f'Skew is {skew}, kurtosis is {kurtosis}')
-
 
 if __name__ == '__main__':
-    main()
+    simulate_battle(verbose=True, plot=True)
