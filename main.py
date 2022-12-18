@@ -7,7 +7,7 @@ from characters import Character
 from estimators import *
 
 
-def display_plots(mod_est, ac_est):
+def display_est_plots(mod_est, ac_est):
     fig, axs = plt.subplots(2, len(mod_est))
     for idx, (name, est) in enumerate(mod_est.items()):
         ax_idx = 0 if len(mod_est) == 1 else (0, idx)
@@ -25,11 +25,21 @@ def display_plots(mod_est, ac_est):
     plt.show()
 
 
-def simulate_battle(verbose: bool = False):
-    party1 = [Character('Manster Wipower', 600, 10, 10, 0, 8, False),
-              Character('Abayes Satano\'brien', 1000, 14, 10, 0, 10, False)]
-    party2 = [Character('Blelduth Chestsplitter', 1200, 14, 10, 0, 8,
-                        False)]  # , Character('Washingtonlotus Toadstallchardson', 30, 8, 14, 0, 8, True)]
+def display_hp_plot(p1hp, p2hp):
+    plt.plot(p1hp, '-')
+    plt.plot(p2hp, '-')
+    plt.xlabel('Rounds')
+    plt.ylabel('Total Party HP')
+    plt.legend(['Party 1', 'Party 2'])
+    plt.title('HP Over Time for Two Parties in Combat')
+    plt.show()
+
+
+def simulate_battle(verbose: bool = False, plot: bool = False):
+    party1 = [Character('Manster Wipower', 90, 10, 10, 0, 8, False),
+              Character('Abayes Satano\'brien', 150, 14, 10, 0, 10, False)]
+    party2 = [Character('Blelduth Chestsplitter', 180, 14, 10, 0, 8, False),
+              Character('Washingtonlotus Toadstallchardson', 90, 8, 14, 0, 8, True)]
     mod_est = {c.name: ModifierEstimator() for c in party2}
     ac_est = {c.name: ACEstimator() for c in party2}
     all_characters = {c.name: c for c in party1 + party2}
@@ -40,6 +50,8 @@ def simulate_battle(verbose: bool = False):
     acrange = [max(ac_full_range) - min(ac_full_range) + 1]
     mod_full_range = ac_est[party2[0].name].xvals
     modrange = [max(mod_full_range) - min(mod_full_range) + 1]
+    p1hp = [sum(c.hp for c in party1)]
+    p2hp = [sum(c.hp for c in party2)]
 
     if verbose:
         print(f'Initiative order is {initiative_order} (scores are {initiative})')
@@ -76,8 +88,8 @@ def simulate_battle(verbose: bool = False):
                 est.update(to_hit)
                 poss = est.xvals[est.current_estimate > 0]
                 modrange.append(max(poss) - min(poss) + 1)
-        if verbose:
-            display_plots(mod_est, ac_est)
+        p1hp.append(sum(c.hp for c in party1))
+        p2hp.append(sum(c.hp for c in party2))
         if all(c.hp <= 0 for c in party1):
             if verbose:
                 print('Freak the Mighty wins!')
@@ -92,6 +104,8 @@ def simulate_battle(verbose: bool = False):
             assert acest.xvals[acest.current_estimate > 0][0] == party2[0].ac
             assert modest.xvals[modest.current_estimate > 0][0] == party2[0].weapon_bonus + party2[0].prof
             break
+    if plot:
+        display_hp_plot(p1hp, p2hp)
     return np.array(acrange), np.array(modrange)
 
 
